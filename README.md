@@ -101,7 +101,9 @@ Project Structure
 ```bash
 
 Review_Analyzer/
-├── main.py                # Main entry point
+├── templates/
+│   ├── index.html                  # Template
+├── app.py                # Main entry point
 ├── requirements.txt
 ├── .gitignore
 └── README.md
