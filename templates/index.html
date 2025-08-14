@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Analyzer & Ticket Creator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .badge-positive { background-color: #28a745; }
+        .badge-neutral { background-color: #6c757d; }
+        .badge-negative { background-color: #dc3545; }
+        .loading-spinner { display: none; text-align: center; }
+        .card-section { background: #fff; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+    <h1 class="text-center mb-4">Review Analyzer & Ticket Creator</h1>
+
+    <!-- Review Input -->
+    <div class="card-section shadow-sm">
+        <h5>Enter a Review</h5>
+        <textarea id="reviewInput" class="form-control mb-3" rows="4" placeholder="Type or paste a review here..."></textarea>
+        <div class="d-flex justify-content-end">
+            <button id="analyzeBtn" class="btn btn-primary me-2">Analyze</button>
+            <button id="clearBtn" class="btn btn-secondary">Clear</button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingSpinner" class="loading-spinner mb-4">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2">Processing...</p>
+    </div>
+
+    <!-- Sentiment Result -->
+    <div class="card-section shadow-sm">
+        <h5>Analysis Result</h5>
+        <p><strong>Sentiment:</strong> <span id="sentimentBadge" class="badge"></span></p>
+    </div>
+
+    <!-- Explanation -->
+    <div class="card-section shadow-sm">
+        <h5>Explanation</h5>
+        <textarea id="explanation" class="form-control mb-2" rows="3" placeholder="Explanation will appear here..." readonly></textarea>
+        <button id="rephraseExplanationBtn" class="btn btn-info btn-sm">Rephrase Explanation</button>
+    </div>
+
+    <!-- Rephrased Review -->
+    <div class="card-section shadow-sm">
+        <h5>Rephrased Review</h5>
+        <textarea id="rephraseOutput" class="form-control mb-2" rows="3" placeholder="Rephrased review will appear here..."></textarea>
+        <button id="rephraseBtn" class="btn btn-warning btn-sm me-2">Rephrase Review</button>
+        <button id="exportBtn" class="btn btn-success btn-sm">Export as Ticket</button>
+    </div>
+
+    <!-- Ticket History -->
+    <div class="card-section shadow-sm">
+        <h5>Ticket History (Session)</h5>
+        <table class="table table-bordered table-sm">
+            <thead>
+                <tr>
+                    <th>Ticket ID</th>
+                    <th>Sentiment</th>
+                    <th>Review</th>
+                    <th>Explanation</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody id="ticketHistory"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const reviewInput = document.getElementById("reviewInput");
+    const sentimentBadge = document.getElementById("sentimentBadge");
+    const explanationTextarea = document.getElementById("explanation");
+    const rephraseOutput = document.getElementById("rephraseOutput");
+    const loadingSpinner = document.getElementById("loadingSpinner");
+    const ticketHistory = document.getElementById("ticketHistory");
+
+    // Analyze review
+    document.getElementById("analyzeBtn").onclick = async () => {
+        const review = reviewInput.value.trim();
+        if (!review) return alert("Please enter a review.");
+
+        loadingSpinner.style.display = "block";
+        sentimentBadge.textContent = "";
+        explanationTextarea.value = "";
+        rephraseOutput.value = "";
+
+        const response = await fetch("/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ review })
+        });
+
+        const data = await response.json();
+        loadingSpinner.style.display = "none";
+
+        sentimentBadge.textContent = data.sentiment;
+        sentimentBadge.className = "badge " + 
+            (data.sentiment === "Positive" ? "badge-positive" :
+             data.sentiment === "Negative" ? "badge-negative" : "badge-neutral");
+        explanationTextarea.value = data.explanation || "No explanation provided.";
+    };
+
+    // Rephrase review
+    document.getElementById("rephraseBtn").onclick = async () => {
+        const review = reviewInput.value.trim();
+        if (!review) return alert("Please enter a review first.");
+
+        loadingSpinner.style.display = "block";
+        const response = await fetch("/rephrase", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ review })
+        });
+
+        const data = await response.json();
+        loadingSpinner.style.display = "none";
+
+        rephraseOutput.value = data.rephrased;
+    };
+
+    // Rephrase explanation
+    document.getElementById("rephraseExplanationBtn").onclick = async () => {
+        const explanation = explanationTextarea.value.trim();
+        if (!explanation) return alert("No explanation to rephrase.");
+
+        loadingSpinner.style.display = "block";
+        const response = await fetch("/rephrase", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ review: explanation })
+        });
+
+        const data = await response.json();
+        loadingSpinner.style.display = "none";
+
+        explanationTextarea.value = data.rephrased;
+    };
+
+    // Export as ticket
+    document.getElementById("exportBtn").onclick = async () => {
+        const review = reviewInput.value.trim();
+        const sentiment = sentimentBadge.textContent;
+        const explanation = explanationTextarea.value;
+        const rephrased = rephraseOutput.value || "";
+
+        if (!review || !sentiment) return alert("Analyze the review before creating a ticket.");
+
+        const response = await fetch("/create_ticket", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ review, sentiment, explanation, rephrased })
+        });
+
+        const data = await response.json();
+        alert(`Ticket created! Ticket Number: ${data.ticket_id}`);
+
+        const row = `<tr>
+            <td>${data.ticket_id}</td>
+            <td>${sentiment}</td>
+            <td>${review}</td>
+            <td>${explanation}</td>
+            <td>${new Date().toLocaleString()}</td>
+        </tr>`;
+        ticketHistory.innerHTML += row;
+    };
+
+    // Clear all
+    document.getElementById("clearBtn").onclick = () => {
+        reviewInput.value = "";
+        sentimentBadge.textContent = "";
+        explanationTextarea.value = "";
+        rephraseOutput.value = "";
+    };
+</script>
+</body>
+</html>
